@@ -1,0 +1,7 @@
+name = "RJNN"
+uuid = "dc9aaa2e-7f96-4fe2-b1a6-23460006b591"
+authors = ["Kevin Durant <kdurant@outlook.com>"]
+version = "0.1.0"
+
+[deps]
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
