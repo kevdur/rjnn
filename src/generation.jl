@@ -8,19 +8,18 @@ using Random
 function randnet(ins::Int, outs::Int, hidden::Vector{Int}; density=0.5::Real)
     n_layers = 2 + length(hidden)
     n_nodes = [ins, hidden..., outs]
-    weights = [zeros(m, n) for (m, n) in zip(n_nodes[1:end-1], n_nodes[2:end])]
-    biases = [zeros(1, n) for n in n_nodes[2:end]]
+    dims = zip(n_nodes[1:end-1], n_nodes[2:end])
+    weights = [zeros(m+1, n) for (m, n) in dims]
 
-    # Initialise a random subset of the weights and biases, and ensure that
+    # Initialise a random subset of the weights (and biases), and ensure that
     # every node is connected to its neighbouring layers by at least one edge --
     # i.e., that the weight matrices have no empty rows or columns.
-    for (W, b) in zip(weights, biases)
+    for W in weights
         _randnfill!(W, density)
-        _randnfill!(b, density)
-        _randnconnect!(W)
+        _randnconnect!(@view W[1:end-1,:])
     end
 
-    Net(n_layers, n_nodes, weights, biases)
+    Net(n_layers, n_nodes, weights)
 end
 
 "Initialises a random subset of a matrix's elements using a standard normal
