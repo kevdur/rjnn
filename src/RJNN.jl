@@ -5,6 +5,7 @@
 module RJNN
 
 include("net.jl")
-include("generation.jl")
+include("propagation.jl")
+include("random.jl")
 
 end # module

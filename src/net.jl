@@ -1,5 +1,5 @@
 #==============================================================================#
-# RJNN: Neural Networks
+# RJNN: Neural networks
 #==============================================================================#
 
 #==============================================================================#
@@ -16,56 +16,80 @@
 #  normalised column-wise (so that each column has a mean of 0 and a variance of
 #  1) before being used in training, prediction, etc.
 # 3. To complement the structure of the data matrix, the weights connecting
-#  layers l and l+1 of a network are stored in a matrix of size m+1 x n, where m
-#  and n are the sizes of layers l and l+1 respectively. The final row of each
-#  matrix holds bias terms. Activations are computed via left multiplication
-#  (with the weight matrix appearing on the right).
+#  layers l and l+1 of a network are stored in a matrix of size m x n, where m
+#  and n are the sizes of layers l and l+1 respectively. Activations are
+#  computed via left multiplication (with the weight matrix appearing on the
+#  right). The bias terms for each layer are held in row vectors; separating
+#  them from the weight matrices in this way makes array handling slightly
+#  simpler.
 # 4. The activation function used here is f(x) = 1.7159 tanh(2x/3), as
 #  recommended by LeCun ('Efficient BackProp', 1998). It is symmetric about the
 #  x-axis and, when used with normalised inputs, has an output variance of
 #  roughly 1 (because f(±1) ≈ ±1).
+# 5. The gradient of the weight parameters is stored as part of the network
+#  object; it contains one value per weight parameter (the derivative of the
+#  total prediction error with respect to that parameter). Since the total error
+#  is the sum of per-observation errors, the derivatives that make up the
+#  gradient can be computed by summing simpler, per-observation derivatives.
+#  Each of these computations (of the gradient based on a single observation)
+#  involves both a feedforward and a backpropagation pass, so it makes sense to
+#  store the activities computed during the forward pass for use during
+#  backpropagation. Ideally we would like to compute the activities (one per
+#  unit) for all of the observations at once, in a vectorised way, but storing
+#  all of these values is not feasible. As a compromise, we compute and store
+#  activities in batches (of observations); these activities are then used to
+#  compute per-observation derivatives, which are added to the gradient vector.
 #
 # To do:
 # 1. Apply PCA to the data in addition to standardisation.
 # 2. Try different activation functions (ELU, SELU, etc.; see Keras). Consider
 #  RJMCMC moves that change the activation function of a network/layer?
+# 3. Only use one matrix for backpropagation errors.
 #==============================================================================#
 
 using LinearAlgebra
 
 "An immutable neural network, containing both architecture and parameters."
 struct Net
-    n_layers::Int # input, hidden, and output.
-    n_nodes::Vector{Int} # number of units in each layer.
     weights::Vector{AbstractMatrix{Float64}} # weights[l] connect l and l+1.
+    biases::Vector{AbstractMatrix{Float64}} # per-unit biases, as row vectors.
+    gradients::Vector{AbstractMatrix{Float64}} # per-weight error derivatives.
+    activities::Vector{AbstractMatrix{Float64}} # batch feedforward activities.
+    errors::Vector{AbstractMatrix{Float64}} # batch backpropagation errors.
 end
 
-"Applies a neural network to a given data set."
-function predict!(net::Net, data::AbstractMatrix{Float64},
-        A::AbstractMatrix{Float64}, B::AbstractMatrix{Float64})
-    # A and B are auxiliary matrices that will be overwritten -- the result will
-    # be stored in one of them. Both matrices should have the same number of
-    # rows as the data matrix, and at least as many columns as the tallest
-    # weight has rows. Two auxiliary matrices are required because the in-place
-    # matrix multiplication operation cannot store its result in one of its
-    # arguments, and we need to use the output of each iteration as input to the
-    # next.
-    A[:, 1:size(data, 2)] = data
-    for W in net.weights
-        activities!(A, W, B)
-        A, B = B, A
+function Net(weights, biases, batch_size)
+    gradients = [similar(W) for W in weights]
+    activities = Vector{AbstractMatrix{Float64}}(undef, length(weights))
+    errors = Vector{AbstractMatrix{Float64}}(undef, length(weights))
+    net = Net(weights, biases, gradients, activities, errors)
+    batchsize!(net, batch_size)
+    net
+end
+
+inputs(net)::Int = size(net.weights[1], 1)
+outputs(net)::Int = size(net.weights[end], 2)
+layers(net) = length(net.weights)
+width(net, l)::Int = size(net.weights[l], 2) # no. of units in layer l.
+batchsize(net)::Int = size(net.activities[1], 1)
+
+"Updates a network to operate with a given (maximum) batch size."
+function batchsize!(net, batch_size)
+    for (i, W) in enumerate(net.weights)
+        net.activities[i] = Matrix{Float64}(undef, batch_size, size(W, 2))
+        net.errors[i] = Matrix{Float64}(undef, batch_size, size(W, 2))
     end
-    A
 end
 
-"Computes the activities of the nodes in a single layer."
-function activities!(A::AbstractMatrix{Float64}, W::AbstractMatrix{Float64},
-        B::AbstractMatrix{Float64})
-    # A holds the activities of the previous layer, W the weights connecting the
-    # layers, and B is an auxiliary matrix in which the result will be stored.
-    m, n = size(W)
-    A[:,m] .= 1
-    Av, Bv = @views A[:,1:m], B[:,1:n]
-    mul!(Bv, Av, W, 1, 0) # computes A*W + B.
-    Bv .= 1.71590471 .* tanh.(0.66666667 .* Bv)
+function Base.show(io::IO, net::Net)
+    print(io, "$(layers(net))-layer Net: $(inputs(net)) x ")
+    join(io, (repr(width(net, l)) for l in 1:layers(net)), " x ")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", net::Net)
+    print(io, net, "\n")
+    io = IOContext(io, :compact=>true, :limit=>true)
+    for l in 1:layers(net)
+        print(io, "$l: ", net.weights[l], " + ", net.biases[l], '\n')
+    end
 end
