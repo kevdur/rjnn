@@ -62,36 +62,40 @@ end
 
 function Net(weights, biases, batch_size)
     gradients = [similar(W) for W in weights]
-    activities = Vector{Matrix{Float64}}(undef, length(weights))
-    errors = Vector{Matrix{Float64}}(undef, length(weights))
+    activities = Vector{Matrix{Float64}}(undef, length(weights) + 1)
+    errors = Vector{Matrix{Float64}}(undef, length(weights) + 1)
     net = Net(weights, biases, gradients, activities, errors)
     batchsize!(net, batch_size)
     net
 end
 
+# The input layer does not count towards the depth (number of layers) of the
+# network. It is handled by the width function for convenience sake, via the
+# index l = 0.
 inputs(net) = size(net.weights[1], 1)
 outputs(net) = size(net.weights[end], 2)
-layers(net) = length(net.weights)
-width(net, l) = size(net.weights[l], 2) # no. of units in layer l.
+depth(net) = length(net.weights)
+width(net, l) = l == 0 ? inputs(net) : size(net.weights[l], 2)
 batchsize(net) = size(net.activities[1], 1)
 
 "Updates a network to operate with a given (maximum) batch size."
 function batchsize!(net, batch_size)
-    for (i, W) in enumerate(net.weights)
-        net.activities[i] = Matrix{Float64}(undef, batch_size, size(W, 2))
-        net.errors[i] = Matrix{Float64}(undef, batch_size, size(W, 2))
+    for l = 0:depth(net)
+        w = width(net, l)
+        net.activities[l+1] = Matrix{Float64}(undef, batch_size, w)
+        net.errors[l+1] = Matrix{Float64}(undef, batch_size, w)
     end
 end
 
 function Base.show(io::IO, net::Net)
-    print(io, "$(layers(net))-layer Net: $(inputs(net)) x ")
-    join(io, (repr(width(net, l)) for l in 1:layers(net)), " x ")
+    print(io, "$(depth(net))-layer Net: $(inputs(net)) x ")
+    join(io, (repr(width(net, l)) for l in 1:depth(net)), " x ")
 end
 
 function Base.show(io::IO, ::MIME"text/plain", net::Net)
     print(io, net, "\n")
     io = IOContext(io, :compact=>true, :limit=>true)
-    for l in 1:layers(net)
+    for l in 1:depth(net)
         print(io, "$l: ", net.weights[l], " + ", net.biases[l], '\n')
     end
 end
