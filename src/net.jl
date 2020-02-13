@@ -4,7 +4,7 @@
 
 #==============================================================================#
 # Notes:
-# 1. We use terminology similar to that found in Bishop's 'Pattern Recognition
+# 1. I use terminology similar to that found in Bishop's 'Pattern Recognition
 #  and Machine Learning' (Chapter 5). In particular, the input to a neuron's
 #  activation function is called the 'activation', the resulting output is
 #  called the 'activity' (this is MacKay's choice of terminology), and the
@@ -50,28 +50,30 @@
 using LinearAlgebra
 
 "An immutable neural network, containing both architecture and parameters."
-struct Net
-    weights::Vector{AbstractMatrix{Float64}} # weights[l] connect l and l+1.
-    biases::Vector{AbstractMatrix{Float64}} # per-unit biases, as row vectors.
-    gradients::Vector{AbstractMatrix{Float64}} # per-weight error derivatives.
-    activities::Vector{AbstractMatrix{Float64}} # batch feedforward activities.
-    errors::Vector{AbstractMatrix{Float64}} # batch backpropagation errors.
+struct Net{T<:AbstractMatrix{Float64}}
+    # Weight-related matrices are type parameterised to allow for the use of
+    # sparse (or other) matrix types.
+    weights::Vector{T} # weights[l] connect l and l+1.
+    biases::Vector{Matrix{Float64}} # per-unit biases, as row vectors.
+    gradients::Vector{T} # per-weight error derivatives.
+    activities::Vector{Matrix{Float64}} # batch feedforward activities.
+    errors::Vector{Matrix{Float64}} # batch backpropagation errors.
 end
 
 function Net(weights, biases, batch_size)
     gradients = [similar(W) for W in weights]
-    activities = Vector{AbstractMatrix{Float64}}(undef, length(weights))
-    errors = Vector{AbstractMatrix{Float64}}(undef, length(weights))
+    activities = Vector{Matrix{Float64}}(undef, length(weights))
+    errors = Vector{Matrix{Float64}}(undef, length(weights))
     net = Net(weights, biases, gradients, activities, errors)
     batchsize!(net, batch_size)
     net
 end
 
-inputs(net)::Int = size(net.weights[1], 1)
-outputs(net)::Int = size(net.weights[end], 2)
+inputs(net) = size(net.weights[1], 1)
+outputs(net) = size(net.weights[end], 2)
 layers(net) = length(net.weights)
-width(net, l)::Int = size(net.weights[l], 2) # no. of units in layer l.
-batchsize(net)::Int = size(net.activities[1], 1)
+width(net, l) = size(net.weights[l], 2) # no. of units in layer l.
+batchsize(net) = size(net.activities[1], 1)
 
 "Updates a network to operate with a given (maximum) batch size."
 function batchsize!(net, batch_size)
