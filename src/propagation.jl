@@ -11,12 +11,14 @@
 #  simply apply them to all of the batches and make the code a bit neater.
 #==============================================================================#
 
-h(x) = 1.71590471*tanh.(0.66666667x)
-dh(h) = 1.14393647*(1 - 0.33963596h^2) # takes h(x) as an argument.
+# h(x) = 1.71590471*tanh.(0.66666667x)
+# dh(h) = 1.14393647*(1 - 0.33963596h^2) # takes h(x) as an argument.
+h(x) = tanh.(x)
+dh(h) = (1 - h^2)
 
 "Applies a neural network to a given set of observations."
-function predict!(net, data::AbstractMatrix{Float64},
-        A::AbstractMatrix{Float64})
+function predict!(A::AbstractMatrix{Float64}, net,
+        data::AbstractMatrix{Float64})
     # A is an auxiliary matrix that will be used to store the results; it should
     # have as many rows as the data matrix and as many columns as the network's
     # output layer.
@@ -60,16 +62,23 @@ end
 "Computes the weight gradient of a network with respect to a given data set."
 function backprop!(net, data::AbstractMatrix{Float64},
         targets::AbstractMatrix{Float64})
+    # In addition to computing the weight gradient, this function computes the
+    # gradient with respect to the activations and inputs as well. One could
+    # easily alter it to store these derivatives in an auxiliary matrix (similar
+    # to the one used in the prediction function).
     k, n = batchsize(net), size(data, 1)
+    for G in net.gradients
+        fill!(G, 0.)
+    end
     for i = 1:k:n
-        j = min(i+k-1, n) # the final batch might not be full.
-        feedforward!(net, @view data[i:j,:])
-        feedback!(net, @view targets[i:j,:])
+        j = min(i+k-1, n)
+        feedforward!(net, @view data[i:j,:]) # activities.
+        feedback!(net, @view targets[i:j,:]) # errors and gradient.
     end
 end
 
-"Computes and stores error derivatives, with respect to activations, for a
- network's units."
+"Computes error derivatives with respect to the network's activations and uses
+ these to update the weight gradient."
 function feedback!(net, target_batch::AbstractMatrix{Float64})
     k = size(target_batch, 1)
     partial = k < batchsize(net)
@@ -85,23 +94,20 @@ function feedback!(net, target_batch::AbstractMatrix{Float64})
         if partial
             A, E = @views A[1:k,:], E[1:k,:]
         end
-        gradients!(G, B, A) # for the weights connecting layers l and l+1.
-        errors!(E, B, A, W) # for the units in layer l.
+        gradient!(G, B, A) # for the weights connecting layers l-1 and l.
+        if l > 1
+            errors!(E, B, A, W) # for the units in layer l-1.
+        else
+            inerrors!(E, B, W) # for the input units.
+        end
         B = E
     end
 end
 
 outerrors!(E, A, T) = E .= (A .- T) .* dh.(A)
+inerrors!(E, B, W) = mul!(E, B, transpose(W))
 
-"Computes error derivatives with respect to weights for a layer of units."
-function gradients!(G, B, A)
-    # B contains the errors of the next layer, and A the activities of the
-    # current one. The gradient with respect to the weights between these layers
-    # will be stored in G.
-    mul!(G, transpose(A), B)
-end
-
-"Computes error derivatives with respect to activations for a layer of units."
+"Computes error derivatives with respect to the activations of a hidden layer."
 function errors!(E, B, A, W)
     # B contains the errors of the next layer, A the activities of the current
     # layer, and W the weights between the two layers. The resulting errors will
@@ -110,9 +116,11 @@ function errors!(E, B, A, W)
     E .*= dh.(A)
 end
 
-# "Computes error derivatives with respect to activations for the output layer."
-# function outerrors!(E, A, T)
-#     # A contains the activities of the output units, and T the targets. The
-#     # resulting errors will be stored in B.
-#     E .= (A .- T) .* dh.(A)
-# end
+"Computes error derivatives with respect to the weights between two layers and
+ adds these to the current gradient."
+function gradient!(G, B, A)
+    # B contains the errors of the next layer, and A the activities of the
+    # current one. The gradient with respect to the weights between these layers
+    # will be added to G (as in G += A'*B).
+    mul!(G, transpose(A), B, 1., 1.)
+end

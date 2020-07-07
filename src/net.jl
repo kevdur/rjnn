@@ -45,6 +45,8 @@
 # 2. Try different activation functions (ELU, SELU, etc.; see Keras). Consider
 #  RJMCMC moves that change the activation function of a network/layer?
 # 3. Only use one matrix for backpropagation errors.
+# 4. Compute and store gradients with respect to bias variables as well. I think
+#  this involves adding an extra row to the activity and error matrices.
 #==============================================================================#
 
 using LinearAlgebra
