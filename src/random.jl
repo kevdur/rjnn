@@ -35,12 +35,12 @@ end
  value."
 function randnconnect!(A::AbstractMatrix{<:AbstractFloat})
     for i in axes(A, 1)
-        if all(iszero, @view A[i,:])         # we could call iszero on the array
-            A[i, rand(axes(A, 2))] = randn() # directly, but it doesn't
-        end                                  # short-circuit.
+        if iszero(@view A[i,:])
+            A[i, rand(axes(A, 2))] = randn()
+        end
     end
     for j in axes(A, 2)
-        if all(iszero, @view A[:,j])
+        if iszero(@view A[:,j])
             A[rand(axes(A, 1)), j] = randn()
         end
     end

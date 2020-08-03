@@ -18,8 +18,8 @@
 # 3. To complement the structure of the data matrix, the weights connecting
 #  layers l and l+1 of a network are stored in a matrix of size m x n, where m
 #  and n are the sizes of layers l and l+1 respectively. Activations are
-#  computed via left multiplication (with the weight matrix appearing on the
-#  right). The bias terms for each layer are held in row vectors; separating
+#  computed via left multiplication (i.e., with the weight matrix appearing on
+#  the right). The bias terms for each layer are held in row vectors; separating
 #  them from the weight matrices in this way makes array handling slightly
 #  simpler.
 # 4. The activation function used here is f(x) = 1.7159 tanh(2x/3), as
